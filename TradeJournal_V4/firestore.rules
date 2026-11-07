@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: default deny all unmapped access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com');
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    // User Profile validation
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() <= 128 && data.uid == request.auth.uid &&
+             data.email is string && data.email.size() <= 120 &&
+             (!('name' in data) || (data.name is string && data.name.size() <= 100)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1000)) &&
+             (!('initialCapital' in data) || (data.initialCapital is number)) &&
+             (!('capitalDeposited' in data) || (data.capitalDeposited is number)) &&
+             (!('capitalWithdrawn' in data) || (data.capitalWithdrawn is number)) &&
+             (!('customStrategies' in data) || (data.customStrategies is list && data.customStrategies.size() <= 50)) &&
+             (!('createdAt' in data) || (data.createdAt is timestamp || data.createdAt is string)) &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp || data.updatedAt is string));
+    }
+
+    // Trade Validation
+    function isValidTrade(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.tradeDate is string && data.tradeDate.size() >= 10 && data.tradeDate.size() <= 30 &&
+             data.symbol is string && data.symbol.size() >= 1 && data.symbol.size() <= 20 &&
+             data.quantity is number &&
+             data.profitLoss is number &&
+             data.strategy is string && data.strategy.size() >= 1 && data.strategy.size() <= 60 &&
+             data.confidenceLevel is number && data.confidenceLevel >= 1 && data.confidenceLevel <= 10 &&
+             (!('id' in data) || (data.id is string && data.id.size() <= 128)) &&
+             (!('tradeType' in data) || (data.tradeType in ['LONG', 'SHORT'])) &&
+             (!('entryPrice' in data) || (data.entryPrice is number)) &&
+             (!('exitPrice' in data) || (data.exitPrice is number)) &&
+             (!('setup' in data) || (data.setup is string && data.setup.size() <= 100)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000)) &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 500000)) &&
+             (!('createdAt' in data) || (data.createdAt is timestamp || data.createdAt is string)) &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp || data.updatedAt is string));
+    }
+
+    // Capital Transaction Validation
+    function isValidCapital(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.type in ['DEPOSIT', 'WITHDRAWAL', 'ADJUSTMENT'] &&
+             data.amount is number &&
+             data.date is string && data.date.size() <= 30 &&
+             (!('id' in data) || (data.id is string && data.id.size() <= 128)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 500)) &&
+             (!('createdAt' in data) || (data.createdAt is timestamp || data.createdAt is string));
+    }
+
+    // User Profile Collection
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false; // Blanket user collection enumeration forbidden
+
+      allow create: if isValidId(userId) && isOwner(userId) &&
+                       isValidUser(request.resource.data) &&
+                       request.resource.data.keys().hasAll(['uid', 'email']) &&
+                       request.resource.data.keys().hasOnly(['uid', 'email', 'name', 'photoURL', 'initialCapital', 'capitalDeposited', 'capitalWithdrawn', 'customStrategies', 'createdAt', 'updatedAt']);
+
+      allow update: if isValidId(userId) && isOwner(userId) &&
+                       isValidUser(request.resource.data) &&
+                       request.resource.data.uid == resource.data.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'photoURL', 'initialCapital', 'capitalDeposited', 'capitalWithdrawn', 'customStrategies', 'updatedAt']);
+
+      allow delete: if isValidId(userId) && isOwner(userId);
+
+      // Subcollection: Trades
+      match /trades/{tradeId} {
+        allow get: if isValidId(userId) && isOwner(userId) && isValidId(tradeId);
+        allow list: if isValidId(userId) && isOwner(userId);
+
+        allow create: if isValidId(userId) && isOwner(userId) && isValidId(tradeId) &&
+                         isValidTrade(request.resource.data) &&
+                         request.resource.data.keys().hasAll(['userId', 'tradeDate', 'symbol', 'quantity', 'profitLoss', 'strategy', 'confidenceLevel']) &&
+                         request.resource.data.keys().hasOnly(['id', 'userId', 'tradeDate', 'symbol', 'tradeType', 'quantity', 'entryPrice', 'exitPrice', 'profitLoss', 'strategy', 'setup', 'confidenceLevel', 'notes', 'imageUrl', 'createdAt', 'updatedAt']);
+
+        allow update: if isValidId(userId) && isOwner(userId) && isValidId(tradeId) &&
+                         isValidTrade(request.resource.data) &&
+                         request.resource.data.userId == resource.data.userId &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                           'tradeDate', 'symbol', 'tradeType', 'quantity', 'entryPrice', 'exitPrice',
+                           'profitLoss', 'strategy', 'setup', 'confidenceLevel', 'notes', 'imageUrl', 'updatedAt'
+                         ]);
+
+        allow delete: if isValidId(userId) && isOwner(userId) && isValidId(tradeId);
+      }
+
+      // Subcollection: Capital Transactions
+      match /capital/{capitalId} {
+        allow get: if isValidId(userId) && isOwner(userId) && isValidId(capitalId);
+        allow list: if isValidId(userId) && isOwner(userId);
+
+        allow create: if isValidId(userId) && isOwner(userId) && isValidId(capitalId) &&
+                         isValidCapital(request.resource.data) &&
+                         request.resource.data.keys().hasAll(['userId', 'type', 'amount', 'date']) &&
+                         request.resource.data.keys().hasOnly(['id', 'userId', 'type', 'amount', 'date', 'notes', 'createdAt']);
+
+        allow update: if isValidId(userId) && isOwner(userId) && isValidId(capitalId) &&
+                         isValidCapital(request.resource.data) &&
+                         request.resource.data.userId == resource.data.userId &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['amount', 'date', 'notes', 'type']);
+
+        allow delete: if isValidId(userId) && isOwner(userId) && isValidId(capitalId);
+      }
+    }
+  }
+}

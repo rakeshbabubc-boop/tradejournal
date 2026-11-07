@@ -1,0 +1,202 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile with authentication and capital overview",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Firebase Auth user identifier"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Display name of the user"
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 120,
+          "format": "email",
+          "description": "User verified email"
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Profile picture URL"
+        },
+        "initialCapital": {
+          "type": "number",
+          "description": "Base trading account capital"
+        },
+        "capitalDeposited": {
+          "type": "number",
+          "description": "Total money deposited"
+        },
+        "capitalWithdrawn": {
+          "type": "number",
+          "description": "Total money withdrawn"
+        },
+        "customStrategies": {
+          "type": "array",
+          "description": "User custom trading playbook strategies"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when profile was created"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when profile was last modified"
+        }
+      },
+      "required": ["uid", "email"]
+    },
+    "Trade": {
+      "title": "Trading Journal Entry",
+      "description": "Record of an executed financial trade with metrics and notes",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Unique trade document ID"
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Owner user UID"
+        },
+        "tradeDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 20,
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}.*$",
+          "description": "Date of trade execution in ISO or YYYY-MM-DD"
+        },
+        "symbol": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20,
+          "description": "Stock, crypto, forex or futures ticker"
+        },
+        "tradeType": {
+          "type": "string",
+          "enum": ["LONG", "SHORT"],
+          "description": "Long or Short trade direction"
+        },
+        "quantity": {
+          "type": "number",
+          "description": "Position size or contracts"
+        },
+        "entryPrice": {
+          "type": "number",
+          "description": "Average execution entry price"
+        },
+        "exitPrice": {
+          "type": "number",
+          "description": "Average execution exit price"
+        },
+        "profitLoss": {
+          "type": "number",
+          "description": "Calculated net profit or loss"
+        },
+        "strategy": {
+          "type": "string",
+          "maxLength": 60,
+          "description": "Trading setup strategy category"
+        },
+        "setup": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Specific technical setup description"
+        },
+        "confidenceLevel": {
+          "type": "number",
+          "description": "Confidence scale from 1 to 10"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "Trading reflections and trade psychology notes"
+        },
+        "imageUrl": {
+          "type": "string",
+          "maxLength": 500000,
+          "description": "Chart screenshot base64 data URL or image link"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Created timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Updated timestamp"
+        }
+      },
+      "required": ["userId", "tradeDate", "symbol", "quantity", "profitLoss", "strategy", "confidenceLevel"]
+    },
+    "CapitalTransaction": {
+      "title": "Capital Movement",
+      "description": "Deposit, withdrawal, or balance adjustment",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Transaction identifier"
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "User identifier"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["DEPOSIT", "WITHDRAWAL", "ADJUSTMENT"],
+          "description": "Movement classification"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Transaction dollar amount"
+        },
+        "date": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Date of transfer"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional memo or transaction note"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Record creation timestamp"
+        }
+      },
+      "required": ["userId", "type", "amount", "date"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Stores user profiles with authentication metadata and capital figures"
+    },
+    "/users/{userId}/trades/{tradeId}": {
+      "schema": "Trade",
+      "description": "Subcollection containing all trade logs for an isolated individual user"
+    },
+    "/users/{userId}/capital/{capitalId}": {
+      "schema": "CapitalTransaction",
+      "description": "Subcollection storing deposit and withdrawal records for capital management"
+    }
+  }
+}
